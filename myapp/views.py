@@ -1,6 +1,7 @@
+import random
 from rest_framework import viewsets
-from .models import Transactions
-from .serializer import TransactionSerializer
+from .models import Transactions, TransactionsTest, UserInfo
+from .serializer import TransactionSerializer, TransactionTestSerializer, UserInfoSerializer
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
@@ -71,3 +72,69 @@ def delete_transaction(request, id):
         {"detail": "Transaction successfully deleted.", id: id},
         status=status.HTTP_204_NO_CONTENT
     )
+
+@api_view(['POST'])
+def create_transaction_test(request):
+    serializer = UserInfoSerializer(data=request.data)
+
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    validated_data = serializer.validated_data
+
+    try:
+        user_object, created = UserInfo.objects.get_or_create(            
+            name=validated_data['name'],
+            card_bin=validated_data['card_bin'],
+            card_last_four=validated_data['card_last_four'],
+                       
+            defaults={
+                'card_expiry_month': validated_data.get('card_expiry_month'),
+                'card_expiry_year': validated_data.get('card_expiry_year')
+            }
+        )
+    except Exception as e:        
+        return Response(
+            {"error": f"Error en la base de datos al buscar/crear usuario: {e}"}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+    
+    dist_home = random.uniform(0.5, 60.0) if random.random() > 0.05 else random.uniform(60.0, 800.0)
+    dist_last = random.uniform(0.1, 10.0) if random.random() > 0.05 else random.uniform(10.0, 60.0)
+    ratio = random.uniform(0.1, 3.0) if random.random() > 0.05 else random.uniform(3.0, 7.0)
+    
+    repeat_retailer = True if random.random() > 0.1 else False
+    used_chip = random.choice([True, False])
+    used_pin_number = True if random.random() < 0.1 else False
+    online_order = random.choice([True, False])
+    fraud = True if random.random() < 0.07 else False
+
+    try:
+        new_transaction = TransactionsTest(
+            distance_from_home=dist_home,
+            distance_from_last_transaction=dist_last,
+            ratio_to_median_purchase_price=ratio,
+            repeat_retailer=repeat_retailer,
+            used_chip=used_chip,
+            used_pin_number=used_pin_number,
+            online_order=online_order,
+            fraud=fraud,
+            user=user_object
+        )
+        new_transaction.save()
+                
+        response_data = UserInfoSerializer(user_object).data
+       
+        if created:
+            print(f"The user was created {user_object.id} and the transaction was added {new_transaction.id}")
+            return Response(response_data, status=status.HTTP_201_CREATED)
+        else:
+            print(f"The user was found {user_object.id} and the transaction was added {new_transaction.id}")            
+            return Response(response_data, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        print(f"The transaction could not be created for the user: {user_object.id, user_object.name}: {e}")
+        return Response(
+            {"error": f"No se pudo crear la transacción: {e}"}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )     

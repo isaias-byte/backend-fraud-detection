@@ -10,5 +10,6 @@ urlpatterns = [
     path('create-transaction/', views.create_transaction, name='create_transaction'),
     path('update-transaction/<int:id>/', views.update_transaction, name='update_transaction'),
     path('delete-transaction/<int:id>/', views.delete_transaction, name='delete_transaction'),
+    path('create-transaction-test/', views.create_transaction_test, name='create_transaction_test'),
 ]
 # The last line is for serving media files during development.
