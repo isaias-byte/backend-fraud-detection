@@ -89,6 +89,11 @@ DATABASES = {
     }
 }
 
+REST_FRAMEWORK = {
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 25
+}
+
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:8100",  # for ionic serve
     "http://localhost",       # for the app running in an android emulator

@@ -5,6 +5,9 @@ from .serializer import TransactionSerializer, TransactionTestSerializer, UserIn
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
+from django.db.models import Q
+
+from rest_framework.pagination import PageNumberPagination
 
 @api_view(['GET'])
 def transactions(request):
@@ -18,6 +21,14 @@ def transactions(request):
 @api_view(['POST'])
 def create_transaction(request):
     serializer = TransactionSerializer(data=request.data)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['POST'])
+def create_transaction_test_populate(request):
+    serializer = TransactionTestSerializer(data=request.data)
     if serializer.is_valid():
         serializer.save()
         return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -72,6 +83,45 @@ def delete_transaction(request, id):
         {"detail": "Transaction successfully deleted.", id: id},
         status=status.HTTP_204_NO_CONTENT
     )
+
+@api_view(['GET'])
+def all_fraudulent_transactions(request):
+    try:        
+        search_term = request.query_params.get('search', None)
+
+        fraudulent_txs_query = TransactionsTest.objects.filter(fraud=True).select_related('user')
+
+        if search_term:            
+            fraudulent_txs_query = fraudulent_txs_query.filter(
+                Q(user__name__icontains=search_term) |
+                Q(user__card_last_four__icontains=search_term)
+            )
+        
+        fraudulent_txs_query = fraudulent_txs_query.order_by('-id')
+        
+        paginator = PageNumberPagination()
+        paginated_txs = paginator.paginate_queryset(fraudulent_txs_query, request)
+        
+        response_data = []
+        for tx in paginated_txs:            
+            if not tx.user:
+                continue
+                           
+            user_data = UserInfoSerializer(tx.user).data
+               
+            user_data['used_chip'] = tx.used_chip
+            
+            user_data['transaction_id'] = tx.id
+
+            response_data.append(user_data)
+      
+        return paginator.get_paginated_response(response_data)
+    
+    except Exception as e:        
+        return Response(
+            {"error": f"Ocurrió un error: {str(e)}"}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 @api_view(['POST'])
 def create_transaction_test(request):
