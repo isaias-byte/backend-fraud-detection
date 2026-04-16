@@ -6,8 +6,15 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
 from django.db.models import Q
-
 from rest_framework.pagination import PageNumberPagination
+import joblib
+import os
+from django.conf import settings
+import pandas as pd
+
+# Load the pre-trained model
+MODEL_PATH = os.path.join(settings.BASE_DIR, 'rf_fraud_model.joblib') 
+rf_model = joblib.load(MODEL_PATH)
 
 @api_view(['GET'])
 def transactions(request):
@@ -132,6 +139,7 @@ def create_transaction_test(request):
     
     validated_data = serializer.validated_data
 
+    # Get or create the user based on the provided data
     try:
         user_object, created = UserInfo.objects.get_or_create(            
             name=validated_data['name'],
@@ -145,7 +153,7 @@ def create_transaction_test(request):
         )
     except Exception as e:        
         return Response(
-            {"error": f"Error en la base de datos al buscar/crear usuario: {e}"}, 
+            {"error": f"Error in the database while searching/creating user: {e}"}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
     
@@ -156,9 +164,26 @@ def create_transaction_test(request):
     repeat_retailer = True if random.random() > 0.1 else False
     used_chip = random.choice([True, False])
     used_pin_number = True if random.random() < 0.1 else False
-    online_order = random.choice([True, False])
-    fraud = True if random.random() < 0.07 else False
+    online_order = random.choice([True, False])    
+    
+    # Prepare the features for prediction
+    features = pd.DataFrame({
+        'distance_from_home': [dist_home],
+        'distance_from_last_transaction': [dist_last],
+        'ratio_to_median_purchase_price': [ratio],
+        'repeat_retailer': [int(repeat_retailer)],
+        'used_chip': [int(used_chip)],
+        'used_pin_number': [int(used_pin_number)],
+        'online_order': [int(online_order)]
+    })
 
+    # Make the prediction using the loaded model
+    prediction = rf_model.predict(features)
+
+    # Convert the prediction to a boolean value
+    fraud = True if prediction[0] == 1 else False
+
+    # Create the transaction record
     try:
         new_transaction = TransactionsTest(
             distance_from_home=dist_home,
@@ -185,6 +210,6 @@ def create_transaction_test(request):
     except Exception as e:
         print(f"The transaction could not be created for the user: {user_object.id, user_object.name}: {e}")
         return Response(
-            {"error": f"No se pudo crear la transacción: {e}"}, 
+            {"error": f"Could not create the transaction: {e}"}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )     
